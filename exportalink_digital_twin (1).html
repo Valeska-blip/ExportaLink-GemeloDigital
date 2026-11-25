@@ -1,0 +1,2145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EXPORTALINK DIGITAL TWIN — Representación virtual y simulación de operaciones de exportación</title>
+
+  <!-- Tailwind CSS mediante CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            hub: {
+              abyss: '#040d14',
+              teal: '#071926',
+              panel: '#0a2233',
+              emerald: '#10b981',
+              mint: '#34d399',
+              cyan: '#0ea5e9',
+              sky: '#38bdf8'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Three.js y Chart.js mediante CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #040d14;
+      color: #f1f5f9;
+      opacity: 1 !important;
+      visibility: visible !important;
+      overflow-x: hidden;
+    }
+
+    body {
+      background-image:
+        radial-gradient(circle at 12% 10%, rgba(16, 185, 129, 0.14) 0%, transparent 42%),
+        radial-gradient(circle at 88% 18%, rgba(14, 165, 233, 0.15) 0%, transparent 45%),
+        linear-gradient(to right, rgba(56, 189, 248, 0.035) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(16, 185, 129, 0.035) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+    }
+
+    .hud-card {
+      background: linear-gradient(155deg, rgba(10, 34, 51, 0.92) 0%, rgba(7, 25, 38, 0.96) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.24);
+      box-shadow: 0 14px 32px -12px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      border-radius: 1rem;
+    }
+
+    .hud-card-emerald {
+      background: linear-gradient(155deg, rgba(8, 36, 48, 0.94) 0%, rgba(5, 18, 29, 0.97) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.38);
+      box-shadow: 0 16px 38px -12px rgba(0, 0, 0, 0.8), 0 0 28px rgba(16, 185, 129, 0.09);
+      border-radius: 1rem;
+    }
+
+    #three-stage-wrapper {
+      position: relative;
+      width: 100%;
+      height: 440px;
+      border-radius: 0.9rem;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 48%, rgba(16, 185, 129, 0.14), rgba(14, 165, 233, 0.08) 46%, rgba(4, 13, 20, 0.98) 85%);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+
+    #three-stage-wrapper:active {
+      cursor: grabbing;
+    }
+
+    #three-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .orbit-node-chip {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      z-index: 15;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .orbit-node-chip:hover {
+      transform: translate(-50%, -50%) scale(1.05);
+    }
+
+    input[type="range"].hub-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(15, 41, 61, 0.95);
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      outline: none;
+    }
+
+    input[type="range"].hub-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 2px solid #040d14;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.75);
+    }
+
+    input[type="range"].hub-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 2px solid #040d14;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.75);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- BANNER DE AVISO DEMOSTRATIVO Y EDITABLE -->
+  <div class="w-full bg-emerald-950/85 border-b border-emerald-400/35 px-4 py-1.5 text-center text-xs text-emerald-200">
+    <span class="font-bold text-emerald-300">DATOS DEMOSTRATIVOS Y EDITABLES:</span>
+    Prototipo conceptual para EXPORTALINK (Andean Grains • Quinua en grano • Lote QN-EC-001 • Ref. EXP-QUINUA-001). No representa operaciones comerciales reales.
+  </div>
+
+  <!-- ENCABEZADO DEL MÓDULO -->
+  <header class="sticky top-0 z-30 bg-hub-abyss/92 backdrop-blur-md border-b border-sky-400/20 px-4 lg:px-6 py-3">
+    <div class="max-w-[1620px] mx-auto flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500/25 to-sky-500/25 border border-emerald-400/50 flex items-center justify-center shrink-0">
+          <!-- Icono de cubo logístico y red global -->
+          <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-white">
+              EXPORTALINK <span class="text-emerald-400">DIGITAL TWIN</span>
+            </h1>
+            <span class="px-2.5 py-0.5 text-[11px] font-mono rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/40">
+              DEMOSTRATIVO • EDITABLE
+            </span>
+            <span id="webgl-status-pill" class="px-2.5 py-0.5 text-[11px] font-mono rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/40">
+              WEBGL 3D ACTIVO
+            </span>
+          </div>
+          <p class="text-xs text-slate-300">Representación virtual y simulación de operaciones de exportación</p>
+        </div>
+      </div>
+
+      <!-- Acciones rápidas -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-1.5 bg-hub-teal border border-sky-400/25 rounded-xl px-2.5 py-1.5 text-xs">
+          <label for="module-filter-select" class="text-slate-400 font-mono">Módulo:</label>
+          <select id="module-filter-select" onchange="selectModuleSection(this.value)" class="bg-transparent text-sky-300 font-semibold focus:outline-none">
+            <option value="all" class="bg-hub-teal">Vista Completa (4 Módulos)</option>
+            <option value="modulo-1" class="bg-hub-teal">1. Modelo Virtual 3D</option>
+            <option value="modulo-2" class="bg-hub-teal">2. Variables del Proceso</option>
+            <option value="modulo-3" class="bg-hub-teal">3. Simulador de Escenarios</option>
+            <option value="modulo-4" class="bg-hub-teal">4. Monitoreo y Trazabilidad</option>
+          </select>
+        </div>
+
+        <button type="button" onclick="saveCurrentStateToStorage()" class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+          Guardar Estado
+        </button>
+
+        <button type="button" onclick="resetToIllustrativeCase()" class="px-3 py-2 rounded-xl bg-hub-teal hover:bg-hub-panel text-slate-200 border border-slate-600 font-semibold text-xs transition flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Restablecer Caso Base
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CUERPO PRINCIPAL CON NAVEGACIÓN LATERAL -->
+  <div class="max-w-[1620px] w-full mx-auto flex-1 flex flex-col lg:flex-row gap-5 px-4 lg:px-6 py-5">
+
+    <!-- NAVEGACIÓN LATERAL -->
+    <aside class="w-full lg:w-64 shrink-0">
+      <div class="hud-card p-3.5 lg:sticky lg:top-20 space-y-2">
+        <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400 px-2 pt-1">Centro de Control</p>
+
+        <button type="button" onclick="selectModuleSection('modulo-1')" data-nav-btn="modulo-1" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-400/40 transition">
+          <span class="w-5 h-5 rounded-md bg-emerald-500/25 text-emerald-300 font-mono flex items-center justify-center text-[11px]">1</span>
+          <span>Modelo Virtual 3D</span>
+        </button>
+
+        <button type="button" onclick="selectModuleSection('modulo-2')" data-nav-btn="modulo-2" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-slate-300 hover:bg-hub-panel border border-transparent transition">
+          <span class="w-5 h-5 rounded-md bg-sky-500/20 text-sky-300 font-mono flex items-center justify-center text-[11px]">2</span>
+          <span>Variables del Proceso</span>
+        </button>
+
+        <button type="button" onclick="selectModuleSection('modulo-3')" data-nav-btn="modulo-3" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-slate-300 hover:bg-hub-panel border border-transparent transition">
+          <span class="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 font-mono flex items-center justify-center text-[11px]">3</span>
+          <span>Simulador de Escenarios</span>
+        </button>
+
+        <button type="button" onclick="selectModuleSection('modulo-4')" data-nav-btn="modulo-4" class="nav-btn w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-slate-300 hover:bg-hub-panel border border-transparent transition">
+          <span class="w-5 h-5 rounded-md bg-purple-500/20 text-purple-300 font-mono flex items-center justify-center text-[11px]">4</span>
+          <span>Monitoreo y Trazabilidad</span>
+        </button>
+
+        <div class="mt-4 pt-3 border-t border-slate-700/70 px-2 space-y-1.5 text-[11px]">
+          <div class="flex justify-between">
+            <span class="text-slate-400">Lote:</span>
+            <span id="side-lote" class="font-mono text-emerald-300 font-semibold">QN-EC-001</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Referencia:</span>
+            <span id="side-ref" class="font-mono text-sky-300">EXP-QUINUA-001</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Incoterm:</span>
+            <span id="side-incoterm" class="font-mono text-white font-semibold">FOB</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Acuerdo:</span>
+            <span id="side-precio" class="font-mono text-emerald-300 font-semibold">USD 1.500</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="flex-1 min-w-0 space-y-6">
+
+      <!-- NOTIFICACIÓN EN PANTALLA (SIN ALERT/CONFIRM) -->
+      <div id="status-toast" class="hidden hud-card-emerald px-4 py-3 flex items-center justify-between gap-3 text-xs sm:text-sm">
+        <div class="flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+          <span id="status-toast-msg" class="text-slate-100 font-medium">Estado actualizado.</span>
+        </div>
+        <button type="button" onclick="hideStatusToast()" class="text-slate-400 hover:text-white font-mono text-xs px-2 py-0.5">✕</button>
+      </div>
+
+      <!-- 6 INDICADORES CLAVE (KPIs) EN TIEMPO REAL -->
+      <section aria-label="Indicadores principales de exportación" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3.5">
+        <div class="hud-card p-4">
+          <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Progreso Operación</p>
+          <p id="kpi-progreso" class="text-2xl font-extrabold text-emerald-400 mt-1">70%</p>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full mt-2 overflow-hidden">
+            <div id="kpi-progreso-bar" class="h-full bg-gradient-to-r from-emerald-400 to-sky-400 rounded-full transition-all duration-300" style="width: 70%"></div>
+          </div>
+        </div>
+
+        <div class="hud-card p-4">
+          <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Inventario Disponible</p>
+          <p id="kpi-inv-disp" class="text-2xl font-extrabold text-sky-300 mt-1">300 kg</p>
+          <p id="kpi-inv-base-note" class="text-[11px] text-slate-400 mt-1 font-mono">Inicial: 800 kg</p>
+        </div>
+
+        <div class="hud-card p-4">
+          <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Cant. Comprometida</p>
+          <p id="kpi-comprometida" class="text-2xl font-extrabold text-white mt-1">500 kg</p>
+          <p id="kpi-comprador-label" class="text-[11px] text-emerald-300 mt-1 truncate">Global Foods Import LLC</p>
+        </div>
+
+        <div class="hud-card p-4">
+          <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Tiempo Restante Est.</p>
+          <p id="kpi-tiempo-restante" class="text-2xl font-extrabold text-amber-300 mt-1">6 días</p>
+          <p id="kpi-transito-label" class="text-[11px] text-slate-400 mt-1 font-mono">Tránsito: 20d (+0d)</p>
+        </div>
+
+        <div class="hud-card p-4">
+          <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Llegada Proyectada</p>
+          <p id="kpi-llegada" class="text-base font-extrabold text-sky-300 mt-2 font-mono">2026-12-05</p>
+          <p id="kpi-destino-label" class="text-[11px] text-slate-400 mt-1 truncate">Miami, Estados Unidos</p>
+        </div>
+
+        <div class="hud-card p-4">
+          <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Estado Exportación</p>
+          <p id="kpi-estado-operacion" class="text-sm font-bold text-emerald-300 mt-2">4. Transporte internacional</p>
+          <p id="kpi-sc-estado" class="text-[11px] text-sky-300 mt-1 font-mono">SC Estado 4: Mercancía en tránsito</p>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- MÓDULO 1: MODELO VIRTUAL DE LA OPERACIÓN (DIORAMA 3D + 5 ETAPAS)     -->
+      <!-- =================================================================== -->
+      <section id="modulo-1" class="hud-card-emerald p-5 sm:p-6 space-y-5">
+        <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-700/70 pb-4">
+          <div>
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+              MÓDULO 1 • MODELO VIRTUAL DE LA OPERACIÓN
+            </span>
+            <h2 class="text-xl font-bold text-white mt-1.5">Diorama 3D Interactivo y Cadena de Exportación ExportaLink</h2>
+            <p class="text-xs text-slate-300 mt-0.5">
+              Arrastra con el ratón o dedo para orbitar, usa la rueda para zoom y haz clic en cualquier etapa o nodo operativo para inspeccionar.
+            </p>
+          </div>
+
+          <!-- Controles de cámara 3D y visualización -->
+          <div class="flex flex-wrap items-center gap-1.5 bg-hub-abyss/95 p-1.5 rounded-xl border border-sky-400/25 text-xs">
+            <button type="button" onclick="setCameraPreset('general')" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-semibold hover:bg-emerald-500/30 transition">
+              Vista General
+            </button>
+            <button type="button" onclick="setCameraPreset('plant')" class="px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-hub-panel transition">
+              Planta/Acopio
+            </button>
+            <button type="button" onclick="setCameraPreset('route')" class="px-2.5 py-1.5 rounded-lg text-slate-300 hover:bg-hub-panel transition">
+              Puerto &amp; Ruta
+            </button>
+            <button type="button" onclick="setCameraPreset('reset')" class="px-2.5 py-1.5 rounded-lg bg-hub-teal text-sky-300 border border-slate-700 hover:border-sky-400 font-semibold transition">
+              Reiniciar Cámara
+            </button>
+            <button type="button" id="btn-toggle-labels" onclick="toggleOverlayLabels()" class="px-2.5 py-1.5 rounded-lg bg-hub-teal text-slate-200 border border-slate-700 hover:text-white transition">
+              Etiquetas: ON
+            </button>
+            <button type="button" id="btn-toggle-rings" onclick="toggleRingAnimation()" class="px-2.5 py-1.5 rounded-lg bg-hub-teal text-emerald-300 border border-slate-700 hover:text-white transition">
+              Anillos: ON
+            </button>
+          </div>
+        </div>
+
+        <!-- ESCENA 3D CON THREE.JS + NODOS ORBITALES INTERACTIVOS -->
+        <div id="three-stage-wrapper">
+          <canvas id="three-canvas"></canvas>
+
+          <!-- Respaldo visual si WebGL no está disponible -->
+          <div id="webgl-fallback-view" class="hidden absolute inset-0 p-6 flex flex-col justify-center items-center text-center bg-hub-abyss/95">
+            <p class="text-sm font-bold text-emerald-300">Modo de Respaldo Isométrico 3D Activo</p>
+            <p class="text-xs text-slate-300 max-w-lg mt-1">
+              El contexto WebGL no está disponible en este entorno; utiliza las 5 etapas interactivas inferiores para inspeccionar el flujo completo de exportación.
+            </p>
+          </div>
+
+          <!-- Etiquetas flotantes sobre nodos clave del diorama 3D -->
+          <div id="three-overlays-layer" class="absolute inset-0 pointer-events-none">
+            <button type="button" onclick="focusStageOrNode('stage', 1)" class="orbit-node-chip pointer-events-auto px-2.5 py-1 rounded-lg bg-hub-abyss/90 border border-emerald-400/50 text-[11px] font-semibold text-emerald-200 shadow-lg" style="left: 16%; top: 24%;">
+              1. Productor • <span id="chip-productor">Andean Grains</span>
+            </button>
+            <button type="button" onclick="focusStageOrNode('stage', 2)" class="orbit-node-chip pointer-events-auto px-2.5 py-1 rounded-lg bg-hub-abyss/90 border border-emerald-400/50 text-[11px] font-semibold text-emerald-200 shadow-lg" style="left: 17%; top: 72%;">
+              2. Preparación y embalaje
+            </button>
+            <button type="button" onclick="focusStageOrNode('stage', 3)" class="orbit-node-chip pointer-events-auto px-2.5 py-1 rounded-lg bg-hub-abyss/90 border border-sky-400/50 text-[11px] font-semibold text-sky-200 shadow-lg" style="left: 50%; top: 15%;">
+              3. Puerto de salida • Ecuador
+            </button>
+            <button type="button" onclick="focusStageOrNode('stage', 4)" class="orbit-node-chip pointer-events-auto px-2.5 py-1 rounded-lg bg-hub-abyss/90 border border-sky-400/50 text-[11px] font-semibold text-sky-200 shadow-lg" style="left: 83%; top: 24%;">
+              4. Transporte internacional
+            </button>
+            <button type="button" onclick="focusStageOrNode('stage', 5)" class="orbit-node-chip pointer-events-auto px-2.5 py-1 rounded-lg bg-hub-abyss/90 border border-emerald-400/50 text-[11px] font-semibold text-emerald-200 shadow-lg" style="left: 82%; top: 72%;">
+              5. Comprador • Miami, EE.UU.
+            </button>
+            <button type="button" onclick="focusStageOrNode('op', 'incoterm')" class="orbit-node-chip pointer-events-auto px-2 py-0.5 rounded-md bg-hub-teal/90 border border-amber-400/45 text-[10px] font-mono text-amber-200" style="left: 34%; top: 85%;">
+              Incoterm: <span id="chip-incoterm">FOB</span>
+            </button>
+            <button type="button" onclick="focusStageOrNode('op', 'contract')" class="orbit-node-chip pointer-events-auto px-2 py-0.5 rounded-md bg-hub-teal/90 border border-purple-400/45 text-[10px] font-mono text-purple-200" style="left: 50%; top: 88%;">
+              Smart Contract #<span id="chip-sc">4</span>
+            </button>
+            <button type="button" onclick="focusStageOrNode('op', 'transit')" class="orbit-node-chip pointer-events-auto px-2 py-0.5 rounded-md bg-hub-teal/90 border border-cyan-400/45 text-[10px] font-mono text-cyan-200" style="left: 66%; top: 85%;">
+              Tránsito: <span id="chip-transit">20d</span>
+            </button>
+          </div>
+
+          <!-- Lectura inferior de estado del diorama -->
+          <div class="absolute bottom-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+            <span id="diorama-hub-caption" class="px-3 py-1 rounded-lg bg-hub-abyss/90 border border-emerald-400/35 text-[11px] font-mono text-emerald-300">
+              HUB EXPORTALINK • Lote QN-EC-001 • Ecuador → Miami, Estados Unidos
+            </span>
+            <span id="diorama-camera-info" class="px-3 py-1 rounded-lg bg-hub-abyss/90 border border-sky-400/35 text-[11px] font-mono text-sky-300">
+              Cámara: Vista General • Arrastra para rotar
+            </span>
+          </div>
+        </div>
+
+        <!-- 5 ETAPAS CONECTADAS INTERACTIVAS DE EXPORTACIÓN -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" id="stages-cards-grid"></div>
+
+        <!-- INSPECTOR DE ETAPA O NODO OPERATIVO SELECCIONADO -->
+        <div class="rounded-xl bg-hub-abyss/90 border border-sky-400/30 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="inspector-tag" class="px-2.5 py-0.5 rounded-md font-mono text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-400/40">ETAPA 04</span>
+              <h3 id="inspector-heading" class="text-base font-bold text-white">4. Transporte internacional</h3>
+              <span id="inspector-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-sky-500/20 text-sky-200">EN CURSO</span>
+            </div>
+            <p id="inspector-copy" class="text-xs text-slate-300">
+              Desplazamiento internacional de quinua en grano desde Ecuador hacia Miami, Estados Unidos, con control de días de tránsito.
+            </p>
+            <p id="inspector-meta" class="text-[11px] font-mono text-emerald-300 pt-0.5">
+              Referencia: EXP-QUINUA-001 • Incoterm: FOB • Lote: QN-EC-001
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button type="button" onclick="advanceStage(-1)" class="px-3 py-2 rounded-xl bg-hub-teal hover:bg-hub-panel text-slate-200 border border-slate-600 text-xs font-semibold">
+              ← Etapa Anterior
+            </button>
+            <button type="button" onclick="advanceStage(1)" class="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs">
+              Avanzar Etapa →
+            </button>
+          </div>
+        </div>
+
+        <!-- FICHA DE DATOS DE LA OPERACIÓN + GRÁFICOS DINÁMICOS CHART.JS -->
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-5">
+          <!-- Datos completos requeridos (7 columnas) -->
+          <div class="xl:col-span-7 hud-card p-4 sm:p-5">
+            <div class="flex items-center justify-between border-b border-slate-700/70 pb-3 mb-3.5">
+              <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-300">Datos de la Operación de Exportación</h3>
+              <span class="text-[11px] font-mono text-slate-400">Sincronizado con variables</span>
+            </div>
+
+            <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Nombre del producto</dt>
+                <dd id="data-producto" class="font-semibold text-white mt-0.5">quinua en grano</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Identificación del lote</dt>
+                <dd id="data-lote" class="font-mono font-semibold text-emerald-300 mt-0.5">QN-EC-001</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Referencia del envío</dt>
+                <dd id="data-referencia" class="font-mono font-semibold text-sky-300 mt-0.5">EXP-QUINUA-001</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Productor</dt>
+                <dd id="data-productor" class="font-semibold text-white mt-0.5">Andean Grains</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Comprador</dt>
+                <dd id="data-comprador" class="font-semibold text-white mt-0.5">Global Foods Import LLC</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">País de origen</dt>
+                <dd id="data-origen" class="font-semibold text-sky-300 mt-0.5">Ecuador</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">País y ciudad de destino</dt>
+                <dd id="data-destino" class="font-semibold text-sky-300 mt-0.5">Estados Unidos — Miami</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Cantidad total (Inv. inicial)</dt>
+                <dd id="data-inv-inicial" class="font-mono font-semibold text-white mt-0.5">800 kg</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Cantidad comprometida</dt>
+                <dd id="data-comprometida" class="font-mono font-semibold text-amber-300 mt-0.5">500 kg</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Inventario disponible</dt>
+                <dd id="data-disponible" class="font-mono font-semibold text-emerald-300 mt-0.5">300 kg</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Precio total del acuerdo</dt>
+                <dd id="data-precio" class="font-mono font-semibold text-emerald-400 mt-0.5">USD 1.500</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Incoterm</dt>
+                <dd id="data-incoterm" class="font-mono font-semibold text-white mt-0.5">FOB</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Tiempo estimado de tránsito</dt>
+                <dd id="data-transito" class="font-mono font-semibold text-sky-300 mt-0.5">20 días</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Fecha de salida</dt>
+                <dd id="data-salida" class="font-mono font-semibold text-white mt-0.5">2026-11-15</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800">
+                <dt class="text-slate-400">Fecha estimada de llegada</dt>
+                <dd id="data-llegada" class="font-mono font-semibold text-sky-300 mt-0.5">2026-12-05</dd>
+              </div>
+              <div class="p-2.5 rounded-xl bg-hub-abyss/80 border border-slate-800 sm:col-span-2 lg:col-span-3">
+                <dt class="text-slate-400">Estado actual de la operación</dt>
+                <dd id="data-estado-actual" class="font-bold text-emerald-300 mt-0.5">4. Transporte internacional</dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- Gráficos Chart.js: Asignación de inventario + Cronograma de tránsito (5 columnas) -->
+          <div class="xl:col-span-5 hud-card p-4 sm:p-5 space-y-4">
+            <div>
+              <h3 class="text-sm font-bold uppercase tracking-wider text-sky-300">Asignación de Inventario y Tránsito</h3>
+              <p class="text-[11px] text-slate-400 mt-0.5">Visualización reactiva de kilogramos del lote y días acumulados de viaje.</p>
+            </div>
+
+            <div class="relative h-44">
+              <canvas id="inventoryAllocationChart"></canvas>
+              <div id="invChartFallback" class="hidden text-xs font-mono text-slate-300 pt-2">
+                Comprometido: <span id="fb-inv-comp">500 kg</span> • Disponible: <span id="fb-inv-disp">300 kg</span>
+              </div>
+            </div>
+
+            <div class="relative h-40 pt-2 border-t border-slate-800">
+              <canvas id="transitMilestoneChart"></canvas>
+              <div id="transitChartFallback" class="hidden text-xs font-mono text-sky-300 pt-2">
+                Tránsito estimado: <span id="fb-transit-days">20 días</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- MÓDULO 2: VARIABLES DEL PROCESO                                     -->
+      <!-- =================================================================== -->
+      <section id="modulo-2" class="hud-card p-5 sm:p-6 space-y-4">
+        <div class="border-b border-slate-700/70 pb-3.5">
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-sky-500/20 text-sky-300 border border-sky-400/40">
+            MÓDULO 2 • VARIABLES DEL PROCESO
+          </span>
+          <h2 class="text-xl font-bold text-white mt-1.5">Edición de Variables Operativas y Validaciones</h2>
+          <p class="text-xs text-slate-300 mt-0.5">
+            El inventario disponible se calcula automáticamente como <code class="text-emerald-300">Inventario inicial - Cantidad comprometida</code>.
+          </p>
+        </div>
+
+        <div id="variables-validation-alert" class="hidden rounded-xl px-4 py-3 text-xs font-medium border"></div>
+
+        <form id="process-variables-form" onsubmit="event.preventDefault(); commitVariablesToLog();" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div>
+            <label for="var-producto" class="block text-slate-300 font-medium mb-1">Producto *</label>
+            <input id="var-producto" type="text" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none text-white" />
+          </div>
+
+          <div>
+            <label for="var-lote" class="block text-slate-300 font-medium mb-1">Número de lote *</label>
+            <input id="var-lote" type="text" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-emerald-300" />
+          </div>
+
+          <div>
+            <label for="var-referencia" class="block text-slate-300 font-medium mb-1">Referencia del envío *</label>
+            <input id="var-referencia" type="text" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-sky-300" />
+          </div>
+
+          <div>
+            <label for="var-productor" class="block text-slate-300 font-medium mb-1">Nombre del productor *</label>
+            <input id="var-productor" type="text" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none text-white" />
+          </div>
+
+          <div>
+            <label for="var-comprador" class="block text-slate-300 font-medium mb-1">Nombre del comprador *</label>
+            <input id="var-comprador" type="text" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none text-white" />
+          </div>
+
+          <div>
+            <label for="var-inv-inicial" class="block text-slate-300 font-medium mb-1">Inventario inicial (kg) *</label>
+            <input id="var-inv-inicial" type="number" min="0" step="1" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-white" />
+          </div>
+
+          <div>
+            <label for="var-comprometida" class="block text-slate-300 font-medium mb-1">Cantidad comprometida (kg) *</label>
+            <input id="var-comprometida" type="number" min="0" step="1" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-amber-300" />
+          </div>
+
+          <div>
+            <label for="var-disponible" class="block text-emerald-300 font-medium mb-1">Inventario disponible (Calculado)</label>
+            <input id="var-disponible" type="text" readonly class="w-full px-3 py-2 rounded-xl bg-emerald-950/50 border border-emerald-500/40 font-mono font-bold text-emerald-300 cursor-not-allowed" />
+          </div>
+
+          <div>
+            <label for="var-precio" class="block text-slate-300 font-medium mb-1">Precio total del acuerdo (USD) *</label>
+            <input id="var-precio" type="number" min="0" step="10" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-emerald-300" />
+          </div>
+
+          <div>
+            <label for="var-incoterm" class="block text-slate-300 font-medium mb-1">Incoterm</label>
+            <select id="var-incoterm" onchange="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-white">
+              <option value="FOB">FOB</option>
+              <option value="CIF">CIF</option>
+              <option value="CFR">CFR</option>
+              <option value="EXW">EXW</option>
+              <option value="DAP">DAP</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="var-origen" class="block text-slate-300 font-medium mb-1">Origen *</label>
+            <input id="var-origen" type="text" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none text-white" />
+          </div>
+
+          <div>
+            <label for="var-destino" class="block text-slate-300 font-medium mb-1">Destino (País / Ciudad) *</label>
+            <input id="var-destino" type="text" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none text-white" />
+          </div>
+
+          <div>
+            <label for="var-fecha-salida" class="block text-slate-300 font-medium mb-1">Fecha de salida *</label>
+            <input id="var-fecha-salida" type="date" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-sky-300" />
+          </div>
+
+          <div>
+            <label for="var-transito" class="block text-slate-300 font-medium mb-1">Tiempo estimado de transporte (días) *</label>
+            <input id="var-transito" type="number" min="1" max="180" step="1" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-sky-300" />
+          </div>
+
+          <div>
+            <label for="var-retraso" class="block text-slate-300 font-medium mb-1">Días de retraso</label>
+            <input id="var-retraso" type="number" min="0" max="120" step="1" oninput="handleVariablesLiveChange()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-emerald-400 focus:outline-none font-mono text-amber-300" />
+          </div>
+
+          <div class="flex items-end">
+            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
+              Registrar en Bitácora
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- MÓDULO 3: SIMULADOR DE ESCENARIOS                                   -->
+      <!-- =================================================================== -->
+      <section id="modulo-3" class="hud-card-emerald p-5 sm:p-6 space-y-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-700/70 pb-4">
+          <div>
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-amber-500/20 text-amber-300 border border-amber-400/40">
+              MÓDULO 3 • SIMULADOR DE ESCENARIOS
+            </span>
+            <h2 class="text-xl font-bold text-white mt-1.5">Simulación Comparativa: Escenario Inicial vs. Alternativo</h2>
+            <p class="text-xs text-slate-300 mt-0.5">
+              Evalúa retrasos de transporte, variación del tiempo de tránsito, reducción de inventario, incremento de demanda e incumplimiento de llegada.
+            </p>
+          </div>
+
+          <!-- Presets de escenarios -->
+          <div class="flex flex-wrap items-center gap-1.5 text-xs">
+            <button type="button" onclick="applyScenarioPreset('delay10')" class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-semibold">
+              Retraso transporte +10d
+            </button>
+            <button type="button" onclick="applyScenarioPreset('invDrop')" class="px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 font-semibold">
+              Reducción inventario -250kg
+            </button>
+            <button type="button" onclick="applyScenarioPreset('demandSpike')" class="px-2.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/40 font-semibold">
+              Incremento demanda +200kg
+            </button>
+            <button type="button" onclick="applyScenarioPreset('breachEta')" class="px-2.5 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/40 font-semibold">
+              Incumplimiento llegada (+14d)
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <!-- Controles de simulación (5 columnas) -->
+          <div class="xl:col-span-5 hud-card p-4 sm:p-5 space-y-4 text-xs">
+            <h3 class="text-sm font-bold text-white">Parámetros del Escenario Alternativo</h3>
+
+            <!-- Retraso en el transporte internacional -->
+            <div>
+              <div class="flex justify-between mb-1">
+                <label for="scn-retraso-slider" class="text-slate-300 font-medium">Retraso en el transporte internacional (días)</label>
+                <span id="scn-retraso-lbl" class="font-mono font-bold text-amber-300">+0 días</span>
+              </div>
+              <input id="scn-retraso-slider" type="range" min="0" max="30" step="1" value="0" oninput="linkSliderNum('scn-retraso-slider','scn-retraso-num'); computeScenarioSimulation();" class="w-full hub-slider" />
+              <div class="flex justify-between items-center mt-1">
+                <span class="text-[10px] font-mono text-slate-400">0 a 30 días</span>
+                <input id="scn-retraso-num" type="number" min="0" max="90" value="0" oninput="linkNumSlider('scn-retraso-num','scn-retraso-slider'); computeScenarioSimulation();" class="w-20 px-2 py-1 rounded-lg bg-hub-abyss border border-slate-700 font-mono text-right text-amber-300" />
+              </div>
+            </div>
+
+            <!-- Reducción del inventario disponible -->
+            <div>
+              <div class="flex justify-between mb-1">
+                <label for="scn-inv-slider" class="text-slate-300 font-medium">Reducción del inventario disponible (kg)</label>
+                <span id="scn-inv-lbl" class="font-mono font-bold text-rose-300">-0 kg</span>
+              </div>
+              <input id="scn-inv-slider" type="range" min="0" max="500" step="10" value="0" oninput="linkSliderNum('scn-inv-slider','scn-inv-num'); computeScenarioSimulation();" class="w-full hub-slider" />
+              <div class="flex justify-between items-center mt-1">
+                <span class="text-[10px] font-mono text-slate-400">0 a 500 kg</span>
+                <input id="scn-inv-num" type="number" min="0" max="1500" value="0" oninput="linkNumSlider('scn-inv-num','scn-inv-slider'); computeScenarioSimulation();" class="w-20 px-2 py-1 rounded-lg bg-hub-abyss border border-slate-700 font-mono text-right text-rose-300" />
+              </div>
+            </div>
+
+            <!-- Incremento de la cantidad solicitada -->
+            <div>
+              <div class="flex justify-between mb-1">
+                <label for="scn-dem-slider" class="text-slate-300 font-medium">Incremento de la cantidad solicitada (kg)</label>
+                <span id="scn-dem-lbl" class="font-mono font-bold text-purple-300">+0 kg</span>
+              </div>
+              <input id="scn-dem-slider" type="range" min="0" max="500" step="10" value="0" oninput="linkSliderNum('scn-dem-slider','scn-dem-num'); computeScenarioSimulation();" class="w-full hub-slider" />
+              <div class="flex justify-between items-center mt-1">
+                <span class="text-[10px] font-mono text-slate-400">0 a 500 kg</span>
+                <input id="scn-dem-num" type="number" min="0" max="1500" value="0" oninput="linkNumSlider('scn-dem-num','scn-dem-slider'); computeScenarioSimulation();" class="w-20 px-2 py-1 rounded-lg bg-hub-abyss border border-slate-700 font-mono text-right text-purple-300" />
+              </div>
+            </div>
+
+            <!-- Variación del tiempo de tránsito -->
+            <div>
+              <div class="flex justify-between mb-1">
+                <label for="scn-var-slider" class="text-slate-300 font-medium">Variación del tiempo de tránsito (días)</label>
+                <span id="scn-var-lbl" class="font-mono font-bold text-sky-300">0 días</span>
+              </div>
+              <input id="scn-var-slider" type="range" min="-10" max="25" step="1" value="0" oninput="linkSliderNum('scn-var-slider','scn-var-num'); computeScenarioSimulation();" class="w-full hub-slider" />
+              <div class="flex justify-between items-center mt-1">
+                <span class="text-[10px] font-mono text-slate-400">-10 a +25 días</span>
+                <input id="scn-var-num" type="number" min="-15" max="60" value="0" oninput="linkNumSlider('scn-var-num','scn-var-slider'); computeScenarioSimulation();" class="w-20 px-2 py-1 rounded-lg bg-hub-abyss border border-slate-700 font-mono text-right text-sky-300" />
+              </div>
+            </div>
+
+            <!-- Posible incumplimiento de la fecha estimada de llegada -->
+            <div>
+              <label for="scn-eta-risk" class="block text-slate-300 font-medium mb-1">Posible incumplimiento de la fecha estimada de llegada</label>
+              <select id="scn-eta-risk" onchange="computeScenarioSimulation()" class="w-full px-3 py-2 rounded-xl bg-hub-abyss border border-slate-700 focus:border-sky-400 focus:outline-none text-white">
+                <option value="0" selected>Sin incidencia adicional (+0 días)</option>
+                <option value="4">Riesgo de ventana ajustada en destino (+4 días)</option>
+                <option value="12">Incumplimiento probable de fecha estimada (+12 días)</option>
+              </select>
+            </div>
+
+            <!-- Botones solicitados -->
+            <div class="pt-2 flex flex-col sm:flex-row gap-2">
+              <button type="button" onclick="applyAlternativeScenarioToModel()" class="flex-1 py-2.5 px-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold uppercase tracking-wide transition">
+                Aplicar escenario alternativo al modelo virtual
+              </button>
+              <button type="button" onclick="restoreSimulationDefaults()" class="py-2.5 px-3 rounded-xl bg-hub-abyss hover:bg-hub-panel text-slate-200 border border-slate-600 font-semibold transition">
+                Restaurar valores iniciales
+              </button>
+            </div>
+          </div>
+
+          <!-- Tarjetas comparativas, nivel de riesgo, gráfico Chart.js y recomendaciones (7 columnas) -->
+          <div class="xl:col-span-7 space-y-4">
+            <div class="hud-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Nivel de Riesgo (Reglas: Bajo &lt;3d y stock ≥100kg; Medio 3–9d o stock &lt;100kg; Alto ≥10d o stock &lt;0kg)</p>
+                <p id="scn-risk-reason" class="text-xs text-slate-300 mt-0.5">Sin desviaciones críticas en tránsito ni inventario.</p>
+              </div>
+              <span id="scn-risk-badge" class="px-3.5 py-1.5 rounded-xl font-mono text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 self-start sm:self-auto">
+                RIESGO BAJO
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+              <div class="hud-card p-3.5">
+                <p class="text-slate-400">Fecha estimada de llegada inicial</p>
+                <p id="scn-eta-init" class="text-sm font-mono font-bold text-white mt-1">2026-12-05</p>
+              </div>
+              <div class="hud-card p-3.5">
+                <p class="text-slate-400">Nueva fecha estimada de llegada</p>
+                <p id="scn-eta-new" class="text-sm font-mono font-bold text-sky-300 mt-1">2026-12-05</p>
+              </div>
+              <div class="hud-card p-3.5">
+                <p class="text-slate-400">Variación de días</p>
+                <p id="scn-days-diff" class="text-sm font-mono font-bold text-emerald-300 mt-1">0 días</p>
+              </div>
+              <div class="hud-card p-3.5">
+                <p class="text-slate-400">Inventario inicial (disponible base)</p>
+                <p id="scn-inv-init" class="text-sm font-mono font-bold text-white mt-1">300 kg</p>
+              </div>
+              <div class="hud-card p-3.5">
+                <p class="text-slate-400">Inventario proyectado</p>
+                <p id="scn-inv-proj" class="text-sm font-mono font-bold text-emerald-300 mt-1">300 kg</p>
+              </div>
+              <div class="hud-card p-3.5">
+                <p class="text-slate-400">Diferencia entre escenarios</p>
+                <p id="scn-delta-summary" class="text-sm font-mono font-bold text-sky-300 mt-1">0 kg / 0 días</p>
+              </div>
+            </div>
+
+            <div class="hud-card p-4">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-sky-300 mb-2">Comparación Gráfica: Escenario Inicial vs. Alternativo</h3>
+              <div class="relative h-52">
+                <canvas id="scenarioComparisonBarChart"></canvas>
+                <div id="scnChartFallback" class="hidden text-xs font-mono text-slate-300 pt-2">
+                  Días Base vs Alt: <span id="fb-scn-days">20d vs 20d</span> • Disp Base vs Alt: <span id="fb-scn-stock">300kg vs 300kg</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="hud-card p-4">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-300 mb-2">Recomendaciones Automáticas</h3>
+              <ul id="scn-recommendations" class="list-disc list-inside space-y-1 text-xs text-slate-200"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- MÓDULO 4: MONITOREO Y TRAZABILIDAD                                  -->
+      <!-- =================================================================== -->
+      <section id="modulo-4" class="hud-card p-5 sm:p-6 space-y-6">
+        <div class="border-b border-slate-700/70 pb-3.5">
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-purple-500/20 text-purple-300 border border-purple-400/40">
+            MÓDULO 4 • MONITOREO Y TRAZABILIDAD
+          </span>
+          <h2 class="text-xl font-bold text-white mt-1.5">Línea de Tiempo, Smart Contract ExportaLink y Historial</h2>
+          <p class="text-xs text-slate-300 mt-0.5">
+            Cronología de hitos, verificación interactiva de estados 0 a 5 del Smart Contract y registro en <code class="text-emerald-300">localStorage</code>.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <!-- Línea de tiempo cronológica (5 columnas) -->
+          <div class="xl:col-span-5 hud-card p-4 sm:p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-bold text-emerald-300">Línea de Tiempo de la Operación</h3>
+              <button type="button" onclick="advanceSmartContractMilestone()" class="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 text-[11px] font-semibold">
+                Avanzar Hito +1
+              </button>
+            </div>
+            <ol id="timeline-list" class="space-y-3 text-xs"></ol>
+          </div>
+
+          <!-- Tabla de trazabilidad del Smart Contract ExportaLink (7 columnas) -->
+          <div class="xl:col-span-7 hud-card p-4 sm:p-5">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 class="text-sm font-bold text-sky-300">Estados del Contrato Inteligente ExportaLink (0 a 5)</h3>
+              <span id="sc-active-banner" class="px-2.5 py-0.5 rounded-full font-mono text-[11px] bg-sky-500/20 text-sky-200">
+                Estado actual: 4 - Mercancía en tránsito
+              </span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="border-b border-slate-700 text-slate-400 font-mono text-[11px]">
+                    <th class="py-2 px-2.5">Estado</th>
+                    <th class="py-2 px-2.5">Denominación</th>
+                    <th class="py-2 px-2.5">Descripción de Trazabilidad</th>
+                    <th class="py-2 px-2.5">Indicador</th>
+                  </tr>
+                </thead>
+                <tbody id="smart-contract-tbody" class="divide-y divide-slate-800/80"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Historial persistente en localStorage -->
+        <div class="hud-card p-4 sm:p-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+            <div>
+              <h3 class="text-sm font-bold text-white">Historial Persistente de Cambios y Simulaciones (localStorage)</h3>
+              <p class="text-[11px] text-slate-400">Se guarda automáticamente en el navegador al modificar variables, simular o cambiar estados.</p>
+            </div>
+            <button type="button" onclick="clearPersistedHistory()" class="px-3 py-1.5 rounded-xl bg-hub-abyss hover:bg-rose-950/60 text-slate-300 hover:text-rose-200 border border-slate-700 text-xs font-semibold self-start sm:self-auto">
+              Limpiar Historial
+            </button>
+          </div>
+          <div id="history-log-list" class="mt-3 space-y-2 max-h-60 overflow-y-auto pr-1 text-xs"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="border-t border-slate-800/80 bg-hub-abyss/95 px-4 py-3 text-center text-[11px] text-slate-400">
+    EXPORTALINK DIGITAL TWIN • Prototipo conceptual de gemelo digital aplicado al comercio exterior • Información demostrativa y editable.
+  </footer>
+
+  <!-- ===================================================================== -->
+  <!-- LÓGICA DE GEMELO DIGITAL, THREE.JS 3D, CHART.JS Y LOCALSTORAGE       -->
+  <!-- ===================================================================== -->
+  <script>
+    const STORAGE_OP_KEY = 'exportalink_dt_op_v2';
+    const STORAGE_LOG_KEY = 'exportalink_dt_log_v2';
+
+    const DEFAULT_CASE = Object.freeze({
+      productor: 'Andean Grains',
+      producto: 'quinua en grano',
+      origen: 'Ecuador',
+      destinoPais: 'Estados Unidos',
+      destinoCiudad: 'Miami',
+      destino: 'Estados Unidos — Miami',
+      lote: 'QN-EC-001',
+      inventarioInicial: 800,
+      cantidadComprometida: 500,
+      precio: 1500,
+      incoterm: 'FOB',
+      tiempoTransito: 20,
+      diasRetraso: 0,
+      fechaSalida: '2026-11-15',
+      referencia: 'EXP-QUINUA-001',
+      comprador: 'Global Foods Import LLC',
+      etapaActual: 4,      // 1..5
+      contractState: 4     // 0..5 (4: Mercancía en tránsito)
+    });
+
+    const EXPORT_STAGES = {
+      1: {
+        code: 'ETAPA 01',
+        title: '1. Productor',
+        desc: 'Finca y centro de acopio andino con silos y sacos de quinua en grano verificados para trazabilidad.',
+        doneText: 'COMPLETADA',
+        activeText: 'EN ACOPIO',
+        pendingText: 'PENDIENTE'
+      },
+      2: {
+        code: 'ETAPA 02',
+        title: '2. Preparación y embalaje',
+        desc: 'Planta de limpieza, selección gravimétrica, ensacado y paletizado para exportación.',
+        doneText: 'COMPLETADA',
+        activeText: 'EN EMBALAJE',
+        pendingText: 'PENDIENTE'
+      },
+      3: {
+        code: 'ETAPA 03',
+        title: '3. Puerto de salida',
+        desc: 'Terminal portuaria de salida en Ecuador con grúas, muelle y contenedor listo bajo Incoterm.',
+        doneText: 'DESPACHADA',
+        activeText: 'EN PUERTO',
+        pendingText: 'PENDIENTE'
+      },
+      4: {
+        code: 'ETAPA 04',
+        title: '4. Transporte internacional',
+        desc: 'Buque portacontenedores y ruta marítima internacional en tránsito hacia el destino.',
+        doneText: 'COMPLETADA',
+        activeText: 'EN TRÁNSITO',
+        pendingText: 'PENDIENTE'
+      },
+      5: {
+        code: 'ETAPA 05',
+        title: '5. Comprador internacional',
+        desc: 'Bodega y terminal de recepción en destino para el comprador internacional y cierre de entrega.',
+        doneText: 'ENTREGADA',
+        activeText: 'EN RECEPCIÓN',
+        pendingText: 'PENDIENTE'
+      }
+    };
+
+    const SMART_CONTRACT_STATES = [
+      { code: 0, label: 'Creado', desc: 'Acuerdo comercial preliminar registrado en ExportaLink.' },
+      { code: 1, label: 'Confirmado', desc: 'Condiciones de cantidad, precio e Incoterm confirmadas por las partes.' },
+      { code: 2, label: 'Mercancía preparada', desc: 'Lote limpiado, ensacado, paletizado y listo para despacho.' },
+      { code: 3, label: 'Envío registrado', desc: 'Orden de envío, reserva y documentación de exportación registrada.' },
+      { code: 4, label: 'Mercancía en tránsito', desc: 'Carga embarcada en transporte internacional hacia el destino.' },
+      { code: 5, label: 'Entrega confirmada', desc: 'Recepción conforme confirmada por el comprador internacional.' }
+    ];
+
+    let operation = { ...DEFAULT_CASE };
+    let inspectedItem = { kind: 'stage', id: 4 };
+    let logs = [];
+
+    // Variables de Three.js
+    let scene, camera, renderer, animFrameId;
+    let ringOuter, ringInner, crateGroup, vesselGroup, routeLine, stageMeshes = [];
+    let isDragging = false, prevPointer = { x: 0, y: 0 };
+    let camYaw = 0.55, camPitch = 0.58, camDistance = 15.5;
+    let labelsVisible = true, ringsAnimated = true;
+
+    // Instancias Chart.js
+    let invChart = null;
+    let transitChart = null;
+    let scnChart = null;
+    let toastTimeout = null;
+
+    /* ---------------- UTILIDADES ---------------- */
+    function parseDateSafe(iso) {
+      if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return new Date(Date.UTC(2026, 10, 15, 12, 0, 0));
+      const [y, m, d] = iso.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    }
+
+    function addDays(iso, days) {
+      const dt = parseDateSafe(iso);
+      dt.setUTCDate(dt.getUTCDate() + Math.round(Number(days) || 0));
+      return dt.toISOString().slice(0, 10);
+    }
+
+    function formatUsd(val) {
+      const n = Number(val) || 0;
+      return 'USD ' + n.toLocaleString('es-EC', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function stampNow() {
+      return new Date().toLocaleString('es-EC', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+    }
+
+    function showStatusToast(message) {
+      const el = document.getElementById('status-toast');
+      document.getElementById('status-toast-msg').textContent = message;
+      el.classList.remove('hidden');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => el.classList.add('hidden'), 4000);
+    }
+
+    function hideStatusToast() {
+      document.getElementById('status-toast').classList.add('hidden');
+    }
+
+    /* ---------------- NAVEGACIÓN ---------------- */
+    function selectModuleSection(sectionId) {
+      const selectEl = document.getElementById('module-filter-select');
+      if (selectEl && selectEl.value !== sectionId) selectEl.value = sectionId;
+
+      ['modulo-1', 'modulo-2', 'modulo-3', 'modulo-4'].forEach(id => {
+        const sec = document.getElementById(id);
+        if (!sec) return;
+        if (sectionId === 'all' || sectionId === id) sec.classList.remove('hidden');
+        else sec.classList.add('hidden');
+      });
+
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        const target = btn.getAttribute('data-nav-btn');
+        const active = (sectionId === 'all' && target === 'modulo-1') || target === sectionId;
+        btn.className = active
+          ? 'nav-btn w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-400/40 transition'
+          : 'nav-btn w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-slate-300 hover:bg-hub-panel border border-transparent transition';
+      });
+
+      if (sectionId !== 'all') {
+        const el = document.getElementById(sectionId);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      resizeThreeRenderer();
+    }
+
+    /* ---------------- LOCALSTORAGE Y LOGS ---------------- */
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_OP_KEY, JSON.stringify(operation));
+        localStorage.setItem(STORAGE_LOG_KEY, JSON.stringify(logs));
+      } catch (e) {
+        console.error('Error persistiendo en localStorage:', e);
+      }
+    }
+
+    function loadState() {
+      try {
+        const rawOp = localStorage.getItem(STORAGE_OP_KEY);
+        if (rawOp) {
+          operation = { ...DEFAULT_CASE, ...JSON.parse(rawOp) };
+          inspectedItem = { kind: 'stage', id: operation.etapaActual || 4 };
+        }
+        const rawLogs = localStorage.getItem(STORAGE_LOG_KEY);
+        if (rawLogs) {
+          const parsed = JSON.parse(rawLogs);
+          if (Array.isArray(parsed)) logs = parsed;
+        }
+      } catch (e) {
+        console.error('Error cargando localStorage:', e);
+        operation = { ...DEFAULT_CASE };
+        logs = [];
+      }
+
+      if (!logs.length) {
+        logs.unshift({
+          time: stampNow(),
+          tag: 'CASO DEMO',
+          text: 'Cargado caso ilustrativo Andean Grains — quinua en grano (Lote QN-EC-001, Ref. EXP-QUINUA-001, 800 kg inicial, 500 kg comprometidos, 20 días tránsito).'
+        });
+        saveState();
+      }
+    }
+
+    function saveCurrentStateToStorage() {
+      saveState();
+      appendLog('GUARDADO', 'Estado actual del gemelo digital guardado en localStorage.');
+      showStatusToast('Estado guardado en localStorage.');
+    }
+
+    function resetToIllustrativeCase() {
+      operation = { ...DEFAULT_CASE };
+      inspectedItem = { kind: 'stage', id: operation.etapaActual };
+      populateFormFromOperation();
+      refreshAllUI();
+      computeScenarioSimulation();
+      appendLog('RESTABLECER', 'Se restauraron los datos demostrativos iniciales de Andean Grains (QN-EC-001).');
+      showStatusToast('Caso base demostrativo restablecido.');
+    }
+
+    function appendLog(tag, text) {
+      logs.unshift({ time: stampNow(), tag, text });
+      if (logs.length > 60) logs.length = 60;
+      saveState();
+      renderHistoryLog();
+    }
+
+    function clearPersistedHistory() {
+      logs = [{ time: stampNow(), tag: 'HISTORIAL', text: 'Historial limpiado. Los datos operativos actuales permanecen activos.' }];
+      saveState();
+      renderHistoryLog();
+      showStatusToast('Historial limpiado.');
+    }
+
+    /* ---------------- ESCENA 3D CON THREE.JS ---------------- */
+    function buildStageLandmark3D(stageIndex, pos) {
+      const group = new THREE.Group();
+      group.position.set(pos[0], 0, pos[2]);
+
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: 0x0c293d,
+        metalness: 0.45,
+        roughness: 0.4
+      });
+      const accentMat = new THREE.MeshStandardMaterial({
+        color: 0x10b981,
+        emissive: 0x064e3b,
+        metalness: 0.35,
+        roughness: 0.35
+      });
+
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.05, 0.14, 28), baseMat);
+      pad.position.y = 0.07;
+      group.add(pad);
+
+      let primaryMesh = null;
+
+      if (stageIndex === 1) {
+        // 1. Productor: dos silos andinos de granos + techo cónico
+        [-0.32, 0.32].forEach((sx, i) => {
+          const siloBody = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.28, 0.28, i === 0 ? 0.95 : 0.75, 20),
+            accentMat.clone()
+          );
+          siloBody.position.set(sx, (i === 0 ? 0.95 : 0.75) / 2 + 0.14, 0);
+          const siloRoof = new THREE.Mesh(
+            new THREE.ConeGeometry(0.32, 0.28, 20),
+            new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.4 })
+          );
+          siloRoof.position.set(sx, (i === 0 ? 0.95 : 0.75) + 0.28, 0);
+          group.add(siloBody, siloRoof);
+          if (i === 0) primaryMesh = siloBody;
+        });
+      } else if (stageIndex === 2) {
+        // 2. Preparación y embalaje: nave de planta + sacos/palet encima
+        const hall = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.55, 0.8), accentMat.clone());
+        hall.position.set(0, 0.41, 0);
+        const pallet = new THREE.Mesh(
+          new THREE.BoxGeometry(0.55, 0.28, 0.45),
+          new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5 })
+        );
+        pallet.position.set(0.22, 0.82, 0.18);
+        group.add(hall, pallet);
+        primaryMesh = hall;
+      } else if (stageIndex === 3) {
+        // 3. Puerto de salida: muelle portuario + grúa pórtico
+        const pier = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.24, 0.75), baseMat);
+        pier.position.set(0, 0.26, 0);
+        const craneTower = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.05, 0.2), accentMat.clone());
+        craneTower.position.set(-0.25, 0.88, -0.1);
+        const craneBoom = new THREE.Mesh(
+          new THREE.BoxGeometry(1.05, 0.12, 0.14),
+          new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.35 })
+        );
+        craneBoom.position.set(0.12, 1.38, -0.1);
+        group.add(pier, craneTower, craneBoom);
+        primaryMesh = craneTower;
+      } else if (stageIndex === 4) {
+        // 4. Transporte internacional: boya/estación de ruta marítima + contenedor
+        const pylon = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 0.85, 18), accentMat.clone());
+        pylon.position.set(0, 0.56, 0);
+        const beacon = new THREE.Mesh(
+          new THREE.SphereGeometry(0.2, 16, 16),
+          new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+        );
+        beacon.position.set(0, 1.12, 0);
+        group.add(pylon, beacon);
+        primaryMesh = pylon;
+      } else {
+        // 5. Comprador internacional: bodega receptora en destino
+        const warehouse = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.68, 0.85), accentMat.clone());
+        warehouse.position.set(0, 0.48, 0);
+        const dockRoof = new THREE.Mesh(
+          new THREE.BoxGeometry(1.22, 0.12, 0.92),
+          new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.35 })
+        );
+        dockRoof.position.set(0, 0.88, 0);
+        group.add(warehouse, dockRoof);
+        primaryMesh = warehouse;
+      }
+
+      primaryMesh.userData = { stageNumber: stageIndex };
+      scene.add(group);
+      return primaryMesh;
+    }
+
+    function initThreeDiorama() {
+      const container = document.getElementById('three-stage-wrapper');
+      const canvas = document.getElementById('three-canvas');
+
+      if (typeof THREE === 'undefined' || !container || !canvas) {
+        showWebglFallback();
+        return;
+      }
+
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      } catch (e) {
+        showWebglFallback();
+        return;
+      }
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(44, container.clientWidth / Math.max(1, container.clientHeight), 0.1, 120);
+      updateCameraPosition();
+
+      // Iluminación ambiental y direccional
+      const ambient = new THREE.AmbientLight(0x94a3b8, 0.95);
+      scene.add(ambient);
+
+      const emeraldLight = new THREE.PointLight(0x10b981, 2.2, 28);
+      emeraldLight.position.set(0, 5.5, 0);
+      scene.add(emeraldLight);
+
+      const cyanLight = new THREE.DirectionalLight(0x38bdf8, 1.3);
+      cyanLight.position.set(9, 12, 8);
+      scene.add(cyanLight);
+
+      // Plataforma circular base y anillos luminosos concéntricos
+      const baseDisc = new THREE.Mesh(
+        new THREE.CylinderGeometry(6.4, 6.8, 0.35, 64),
+        new THREE.MeshStandardMaterial({ color: 0x071b29, metalness: 0.65, roughness: 0.3 })
+      );
+      baseDisc.position.y = -0.35;
+      scene.add(baseDisc);
+
+      ringInner = new THREE.Mesh(
+        new THREE.RingGeometry(4.4, 4.62, 64),
+        new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide })
+      );
+      ringInner.rotation.x = -Math.PI / 2;
+      ringInner.position.y = -0.14;
+      scene.add(ringInner);
+
+      ringOuter = new THREE.Mesh(
+        new THREE.RingGeometry(6.1, 6.32, 64),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+      );
+      ringOuter.rotation.x = -Math.PI / 2;
+      ringOuter.position.y = -0.15;
+      scene.add(ringOuter);
+
+      // Centro operativo ExportaLink + transporte terrestre hacia terminal
+      const hubGroup = new THREE.Group();
+      const mainTower = new THREE.Mesh(
+        new THREE.BoxGeometry(2.1, 1.35, 1.65),
+        new THREE.MeshStandardMaterial({ color: 0x0f2d42, metalness: 0.55, roughness: 0.35 })
+      );
+      mainTower.position.set(0, 0.5, -0.35);
+      hubGroup.add(mainTower);
+
+      const roofTrim = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 0.14, 1.75),
+        new THREE.MeshBasicMaterial({ color: 0x10b981 })
+      );
+      roofTrim.position.set(0, 1.24, -0.35);
+      hubGroup.add(roofTrim);
+
+      const truckBody = new THREE.Mesh(
+        new THREE.BoxGeometry(1.1, 0.52, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x0ea5e9, metalness: 0.4, roughness: 0.4 })
+      );
+      truckBody.position.set(1.95, 0.09, 1.15);
+      hubGroup.add(truckBody);
+
+      const truckCab = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 0.42, 0.48),
+        new THREE.MeshStandardMaterial({ color: 0x10b981, metalness: 0.4, roughness: 0.4 })
+      );
+      truckCab.position.set(2.65, 0.04, 1.15);
+      hubGroup.add(truckCab);
+
+      scene.add(hubGroup);
+
+      // Grupo de sacos/pallets de quinua que refleja el inventario
+      crateGroup = new THREE.Group();
+      scene.add(crateGroup);
+      rebuildInventoryCrates3D();
+
+      // 5 Estructuras 3D correspondientes a las etapas de exportación
+      const stageCoords = [
+        [-4.5, 0.45, -1.8],
+        [-3.4, 0.45, 2.7],
+        [0.0, 0.55, -4.5],
+        [3.6, 0.45, -2.2],
+        [4.3, 0.45, 2.3]
+      ];
+
+      stageMeshes = stageCoords.map((pos, idx) => buildStageLandmark3D(idx + 1, pos));
+
+      // Ruta animada (línea curva entre las 5 etapas)
+      const curve = new THREE.CatmullRomCurve3(
+        stageCoords.map(c => new THREE.Vector3(c[0], 0.15, c[2])),
+        false
+      );
+      const pts = curve.getPoints(80);
+      routeLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: 0x34d399 })
+      );
+      scene.add(routeLine);
+
+      // Buque portacontenedores móvil en ruta internacional
+      vesselGroup = new THREE.Group();
+      const hull = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 0.28, 0.4),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0369a1 })
+      );
+      const containerBox = new THREE.Mesh(
+        new THREE.BoxGeometry(0.55, 0.24, 0.3),
+        new THREE.MeshStandardMaterial({ color: 0x10b981 })
+      );
+      containerBox.position.y = 0.24;
+      vesselGroup.add(hull);
+      vesselGroup.add(containerBox);
+      scene.add(vesselGroup);
+
+      // Eventos de interacción de cámara (orbitar con ratón/táctil y zoom con rueda)
+      container.addEventListener('pointerdown', e => {
+        isDragging = true;
+        prevPointer = { x: e.clientX, y: e.clientY };
+      });
+      window.addEventListener('pointerup', () => { isDragging = false; });
+      window.addEventListener('pointermove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - prevPointer.x;
+        const dy = e.clientY - prevPointer.y;
+        prevPointer = { x: e.clientX, y: e.clientY };
+        camYaw -= dx * 0.008;
+        camPitch = Math.max(0.18, Math.min(1.25, camPitch + dy * 0.006));
+        updateCameraPosition();
+        updateCameraReadout('Cámara interactiva (Orbit)');
+      });
+      container.addEventListener('wheel', e => {
+        e.preventDefault();
+        camDistance = Math.max(8, Math.min(24, camDistance + e.deltaY * 0.01));
+        updateCameraPosition();
+      }, { passive: false });
+
+      window.addEventListener('resize', resizeThreeRenderer);
+      syncStageColors3D();
+      animateThreeLoop();
+    }
+
+    function showWebglFallback() {
+      const pill = document.getElementById('webgl-status-pill');
+      if (pill) pill.textContent = 'RESPALDO 3D';
+      const fb = document.getElementById('webgl-fallback-view');
+      if (fb) fb.classList.remove('hidden');
+    }
+
+    function updateCameraPosition() {
+      if (!camera) return;
+      const x = camDistance * Math.sin(camYaw) * Math.cos(camPitch);
+      const y = camDistance * Math.sin(camPitch);
+      const z = camDistance * Math.cos(camYaw) * Math.cos(camPitch);
+      camera.position.set(x, y, z);
+      camera.lookAt(0, 0.3, 0);
+    }
+
+    function updateCameraReadout(label) {
+      const el = document.getElementById('diorama-camera-info');
+      if (el) el.textContent = `${label} • Zoom: ${camDistance.toFixed(1)}m`;
+    }
+
+    function setCameraPreset(preset) {
+      if (preset === 'general') {
+        camYaw = 0.55; camPitch = 0.58; camDistance = 15.5;
+        updateCameraReadout('Cámara: Vista General');
+      } else if (preset === 'plant') {
+        camYaw = -0.75; camPitch = 0.48; camDistance = 11.5;
+        updateCameraReadout('Cámara: Planta/Acopio');
+      } else if (preset === 'route') {
+        camYaw = 1.15; camPitch = 0.65; camDistance = 13.0;
+        updateCameraReadout('Cámara: Puerto & Ruta');
+      } else {
+        camYaw = 0.55; camPitch = 0.58; camDistance = 15.5;
+        updateCameraReadout('Cámara reiniciada');
+      }
+      updateCameraPosition();
+    }
+
+    function toggleOverlayLabels() {
+      labelsVisible = !labelsVisible;
+      const layer = document.getElementById('three-overlays-layer');
+      const btn = document.getElementById('btn-toggle-labels');
+      if (layer) layer.classList.toggle('hidden', !labelsVisible);
+      if (btn) btn.textContent = `Etiquetas: ${labelsVisible ? 'ON' : 'OFF'}`;
+    }
+
+    function toggleRingAnimation() {
+      ringsAnimated = !ringsAnimated;
+      const btn = document.getElementById('btn-toggle-rings');
+      if (btn) btn.textContent = `Anillos: ${ringsAnimated ? 'ON' : 'OFF'}`;
+    }
+
+    function rebuildInventoryCrates3D() {
+      if (!crateGroup || typeof THREE === 'undefined') return;
+      while (crateGroup.children.length > 0) {
+        crateGroup.remove(crateGroup.children[0]);
+      }
+
+      const disponible = Math.max(0, operation.inventarioInicial - operation.cantidadComprometida);
+      const totalKg = Math.max(1, operation.inventarioInicial);
+      const count = Math.min(12, Math.max(1, Math.round((disponible / totalKg) * 8) + (disponible > 0 ? 1 : 0)));
+
+      const crateMat = new THREE.MeshStandardMaterial({
+        color: disponible < 0 ? 0xf43f5e : 0xf59e0b,
+        roughness: 0.45
+      });
+
+      for (let i = 0; i < count; i++) {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.36, 0.48), crateMat);
+        box.position.set(-1.35 + col * 0.56, 0.02 + row * 0.38, 1.35);
+        crateGroup.add(box);
+      }
+    }
+
+    function syncStageColors3D() {
+      if (!stageMeshes.length) return;
+      stageMeshes.forEach((mesh, index) => {
+        const stNum = index + 1;
+        const isSelected = inspectedItem.kind === 'stage' && inspectedItem.id === stNum;
+        if (stNum < operation.etapaActual) {
+          mesh.material.color.setHex(0x10b981);
+          mesh.material.emissive.setHex(0x064e3b);
+        } else if (stNum === operation.etapaActual) {
+          mesh.material.color.setHex(0x38bdf8);
+          mesh.material.emissive.setHex(0x0369a1);
+        } else {
+          mesh.material.color.setHex(0x475569);
+          mesh.material.emissive.setHex(0x1e293b);
+        }
+        mesh.scale.setScalar(isSelected ? 1.25 : 1.0);
+      });
+    }
+
+    function animateThreeLoop() {
+      animFrameId = requestAnimationFrame(animateThreeLoop);
+      if (!renderer || !scene || !camera) return;
+
+      const t = performance.now() * 0.001;
+      if (ringsAnimated && ringInner && ringOuter) {
+        ringInner.rotation.z = t * 0.35;
+        ringOuter.rotation.z = -t * 0.22;
+      }
+
+      if (vesselGroup) {
+        const progressNorm = ((operation.etapaActual - 1) / 5 + (t * 0.06)) % 1;
+        const angle = progressNorm * Math.PI * 2;
+        vesselGroup.position.x = Math.cos(angle) * 4.5;
+        vesselGroup.position.z = Math.sin(angle) * 4.5;
+        vesselGroup.position.y = 0.22;
+        vesselGroup.rotation.y = -angle;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    function resizeThreeRenderer() {
+      const container = document.getElementById('three-stage-wrapper');
+      if (!renderer || !camera || !container) return;
+      const w = container.clientWidth;
+      const h = Math.max(1, container.clientHeight);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    /* ---------------- 5 ETAPAS E INSPECTOR ---------------- */
+    function focusStageOrNode(kind, id) {
+      inspectedItem = { kind, id };
+      if (kind === 'stage') {
+        if (id === 1 || id === 2) setCameraPreset('plant');
+        else if (id === 3 || id === 4) setCameraPreset('route');
+        else setCameraPreset('general');
+      }
+      renderStageCards();
+      renderInspector();
+      syncStageColors3D();
+    }
+
+    function advanceStage(delta) {
+      const next = Math.min(5, Math.max(1, operation.etapaActual + delta));
+      if (next === operation.etapaActual) return;
+      operation.etapaActual = next;
+      inspectedItem = { kind: 'stage', id: next };
+
+      // Sincronizar estado del Smart Contract (0..5) con la etapa (1..5)
+      const mapStageToSc = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+      operation.contractState = mapStageToSc[next] ?? operation.contractState;
+
+      refreshAllUI();
+      computeScenarioSimulation();
+      appendLog('ETAPA', `Etapa operativa actualizada a ${EXPORT_STAGES[next].title} (Smart Contract #${operation.contractState}).`);
+      showStatusToast(`Etapa activa: ${EXPORT_STAGES[next].title}`);
+    }
+
+    function renderStageCards() {
+      const grid = document.getElementById('stages-cards-grid');
+      if (!grid) return;
+
+      grid.innerHTML = [1, 2, 3, 4, 5].map(num => {
+        const st = EXPORT_STAGES[num];
+        const isInspected = inspectedItem.kind === 'stage' && inspectedItem.id === num;
+        let statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-400">${st.pendingText}</span>`;
+        let borderCls = 'border-slate-700/80 hover:border-sky-400/50';
+
+        if (num < operation.etapaActual) {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300">${st.doneText}</span>`;
+          borderCls = 'border-emerald-500/45 hover:border-emerald-400';
+        } else if (num === operation.etapaActual) {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-500/25 text-sky-200">${st.activeText}</span>`;
+          borderCls = 'border-sky-400 bg-sky-950/25';
+        }
+
+        const activeRing = isInspected ? 'ring-2 ring-emerald-400' : '';
+
+        return `
+          <button type="button" onclick="focusStageOrNode('stage', ${num})" class="hud-card p-3.5 text-left transition ${borderCls} ${activeRing}">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="text-[10px] font-mono font-bold text-emerald-300">${st.code}</span>
+              ${statusBadge}
+            </div>
+            <p class="text-xs font-bold text-white">${st.title}</p>
+            <p class="text-[11px] text-slate-400 mt-1 line-clamp-2">${st.desc}</p>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderInspector() {
+      const metaEl = document.getElementById('inspector-meta');
+      metaEl.textContent = `Referencia: ${operation.referencia} • Incoterm: ${operation.incoterm} • Lote: ${operation.lote} • Producto: ${operation.producto}`;
+
+      if (inspectedItem.kind === 'op') {
+        if (inspectedItem.id === 'incoterm') {
+          document.getElementById('inspector-tag').textContent = 'INCOTERM';
+          document.getElementById('inspector-heading').textContent = `Término Comercial: ${operation.incoterm}`;
+          document.getElementById('inspector-badge').textContent = 'ACTIVO';
+          document.getElementById('inspector-copy').textContent =
+            `Acuerdo valorado en ${formatUsd(operation.precio)} para ${operation.cantidadComprometida} kg desde ${operation.origen} hacia ${operation.destino}.`;
+        } else if (inspectedItem.id === 'contract') {
+          const sc = SMART_CONTRACT_STATES[operation.contractState] || SMART_CONTRACT_STATES[3];
+          document.getElementById('inspector-tag').textContent = `SC #${sc.code}`;
+          document.getElementById('inspector-heading').textContent = `Smart Contract: ${sc.label}`;
+          document.getElementById('inspector-badge').textContent = 'TRAZABLE';
+          document.getElementById('inspector-copy').textContent = sc.desc;
+        } else {
+          const totalDays = operation.tiempoTransito + operation.diasRetraso;
+          document.getElementById('inspector-tag').textContent = 'TRÁNSITO';
+          document.getElementById('inspector-heading').textContent = `Tiempo de Tránsito: ${totalDays} días`;
+          document.getElementById('inspector-badge').textContent = `ETA ${addDays(operation.fechaSalida, totalDays)}`;
+          document.getElementById('inspector-copy').textContent =
+            `Salida programada el ${operation.fechaSalida} con tránsito base de ${operation.tiempoTransito} días y retraso actual de ${operation.diasRetraso} días.`;
+        }
+        return;
+      }
+
+      const st = EXPORT_STAGES[inspectedItem.id] || EXPORT_STAGES[4];
+      document.getElementById('inspector-tag').textContent = st.code;
+      document.getElementById('inspector-heading').textContent = st.title;
+      document.getElementById('inspector-copy').textContent = st.desc;
+
+      const badgeEl = document.getElementById('inspector-badge');
+      if (inspectedItem.id < operation.etapaActual) {
+        badgeEl.textContent = st.doneText;
+        badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/20 text-emerald-300';
+      } else if (inspectedItem.id === operation.etapaActual) {
+        badgeEl.textContent = st.activeText;
+        badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-sky-500/20 text-sky-200';
+      } else {
+        badgeEl.textContent = st.pendingText;
+        badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-slate-800 text-slate-400';
+      }
+    }
+
+    /* ---------------- MÓDULO 2: VARIABLES Y VALIDACIÓN ---------------- */
+    function populateFormFromOperation() {
+      document.getElementById('var-producto').value = operation.producto;
+      document.getElementById('var-lote').value = operation.lote;
+      document.getElementById('var-referencia').value = operation.referencia;
+      document.getElementById('var-productor').value = operation.productor;
+      document.getElementById('var-comprador').value = operation.comprador;
+      document.getElementById('var-inv-inicial').value = operation.inventarioInicial;
+      document.getElementById('var-comprometida').value = operation.cantidadComprometida;
+      document.getElementById('var-precio').value = operation.precio;
+      document.getElementById('var-incoterm').value = operation.incoterm;
+      document.getElementById('var-origen').value = operation.origen;
+      document.getElementById('var-destino').value = operation.destino;
+      document.getElementById('var-fecha-salida').value = operation.fechaSalida;
+      document.getElementById('var-transito').value = operation.tiempoTransito;
+      document.getElementById('var-retraso').value = operation.diasRetraso;
+    }
+
+    function handleVariablesLiveChange() {
+      const producto = document.getElementById('var-producto').value.trim();
+      const lote = document.getElementById('var-lote').value.trim();
+      const referencia = document.getElementById('var-referencia').value.trim();
+      const productor = document.getElementById('var-productor').value.trim();
+      const comprador = document.getElementById('var-comprador').value.trim();
+      const origen = document.getElementById('var-origen').value.trim();
+      const destino = document.getElementById('var-destino').value.trim();
+      const fechaSalida = document.getElementById('var-fecha-salida').value;
+      const incoterm = document.getElementById('var-incoterm').value;
+
+      const invIniVal = Number(document.getElementById('var-inv-inicial').value);
+      const compVal = Number(document.getElementById('var-comprometida').value);
+      const precioVal = Number(document.getElementById('var-precio').value);
+      const transitoVal = Number(document.getElementById('var-transito').value);
+      const retrasoVal = Number(document.getElementById('var-retraso').value);
+
+      const alertBox = document.getElementById('variables-validation-alert');
+      const errors = [];
+
+      if (!producto || !lote || !referencia || !productor || !comprador || !origen || !destino) {
+        errors.push('Todos los campos marcados con (*) son obligatorios.');
+      }
+      if (!fechaSalida || !/^\d{4}-\d{2}-\d{2}$/.test(fechaSalida)) {
+        errors.push('Ingresa una fecha de salida válida.');
+      }
+      if ([invIniVal, compVal, precioVal, retrasoVal].some(n => Number.isNaN(n) || n < 0)) {
+        errors.push('Los valores numéricos de inventario, cantidad comprometida, precio y retraso no pueden ser negativos.');
+      }
+      if (Number.isNaN(transitoVal) || transitoVal < 1) {
+        errors.push('El tiempo estimado de transporte debe ser mayor o igual a 1 día.');
+      }
+
+      const safeInvIni = Number.isNaN(invIniVal) ? 0 : Math.max(0, invIniVal);
+      const safeComp = Number.isNaN(compVal) ? 0 : Math.max(0, compVal);
+      const dispCalc = safeInvIni - safeComp;
+      document.getElementById('var-disponible').value = `${dispCalc} kg`;
+
+      if (errors.length > 0) {
+        alertBox.className = 'rounded-xl px-4 py-3 text-xs font-medium border bg-rose-950/75 border-rose-500/50 text-rose-200 block';
+        alertBox.textContent = 'Validación: ' + errors.join(' ');
+      } else if (safeComp > safeInvIni) {
+        alertBox.className = 'rounded-xl px-4 py-3 text-xs font-medium border bg-amber-950/75 border-amber-500/50 text-amber-200 block';
+        alertBox.textContent = `Advertencia: la cantidad comprometida (${safeComp} kg) excede el inventario inicial (${safeInvIni} kg) en ${safeComp - safeInvIni} kg. Inventario disponible: ${dispCalc} kg.`;
+      } else {
+        alertBox.className = 'hidden';
+        alertBox.textContent = '';
+      }
+
+      operation.producto = producto || DEFAULT_CASE.producto;
+      operation.lote = lote || DEFAULT_CASE.lote;
+      operation.referencia = referencia || DEFAULT_CASE.referencia;
+      operation.productor = productor || DEFAULT_CASE.productor;
+      operation.comprador = comprador || DEFAULT_CASE.comprador;
+      operation.origen = origen || DEFAULT_CASE.origen;
+      operation.destino = destino || DEFAULT_CASE.destino;
+      operation.fechaSalida = fechaSalida || DEFAULT_CASE.fechaSalida;
+      operation.incoterm = incoterm || 'FOB';
+      operation.inventarioInicial = safeInvIni;
+      operation.cantidadComprometida = safeComp;
+      operation.precio = Number.isNaN(precioVal) ? 0 : Math.max(0, precioVal);
+      operation.tiempoTransito = Number.isNaN(transitoVal) ? 1 : Math.max(1, transitoVal);
+      operation.diasRetraso = Number.isNaN(retrasoVal) ? 0 : Math.max(0, retrasoVal);
+
+      refreshAllUI();
+      computeScenarioSimulation();
+    }
+
+    function commitVariablesToLog() {
+      handleVariablesLiveChange();
+      appendLog(
+        'VARIABLES',
+        `Variables actualizadas: Lote ${operation.lote} (${operation.producto}), Inv. inicial ${operation.inventarioInicial} kg, Comprometida ${operation.cantidadComprometida} kg, Tránsito ${operation.tiempoTransito}d + ${operation.diasRetraso}d retraso.`
+      );
+      showStatusToast('Cambios registrados en la bitácora y localStorage.');
+    }
+
+    /* ---------------- ACTUALIZACIÓN GLOBAL DE UI ---------------- */
+    function refreshAllUI() {
+      const totalDays = operation.tiempoTransito + operation.diasRetraso;
+      const etaDate = addDays(operation.fechaSalida, totalDays);
+      const disponible = operation.inventarioInicial - operation.cantidadComprometida;
+      const progressPct = { 1: 20, 2: 40, 3: 60, 4: 80, 5: 100 }[operation.etapaActual] ?? 80;
+      const remainingDays = operation.etapaActual === 5 ? 0 : Math.max(1, Math.round(totalDays * ((100 - progressPct) / 100)));
+      const stageObj = EXPORT_STAGES[operation.etapaActual] || EXPORT_STAGES[4];
+      const scObj = SMART_CONTRACT_STATES[operation.contractState] || SMART_CONTRACT_STATES[4];
+
+      // KPIs
+      document.getElementById('kpi-progreso').textContent = `${progressPct}%`;
+      document.getElementById('kpi-progreso-bar').style.width = `${progressPct}%`;
+
+      const dispEl = document.getElementById('kpi-inv-disp');
+      dispEl.textContent = `${disponible} kg`;
+      dispEl.className = disponible < 0 ? 'text-2xl font-extrabold text-rose-400 mt-1' : 'text-2xl font-extrabold text-sky-300 mt-1';
+      document.getElementById('kpi-inv-base-note').textContent = `Inicial: ${operation.inventarioInicial} kg`;
+
+      document.getElementById('kpi-comprometida').textContent = `${operation.cantidadComprometida} kg`;
+      document.getElementById('kpi-comprador-label').textContent = operation.comprador;
+
+      document.getElementById('kpi-tiempo-restante').textContent = `${remainingDays} días`;
+      document.getElementById('kpi-transito-label').textContent = `Tránsito: ${operation.tiempoTransito}d (+${operation.diasRetraso}d)`;
+
+      document.getElementById('kpi-llegada').textContent = etaDate;
+      document.getElementById('kpi-destino-label').textContent = operation.destino;
+
+      document.getElementById('kpi-estado-operacion').textContent = stageObj.title;
+      document.getElementById('kpi-sc-estado').textContent = `SC ${scObj.code}: ${scObj.label}`;
+
+      // Barra lateral
+      document.getElementById('side-lote').textContent = operation.lote;
+      document.getElementById('side-ref').textContent = operation.referencia;
+      document.getElementById('side-incoterm').textContent = operation.incoterm;
+      document.getElementById('side-precio').textContent = formatUsd(operation.precio);
+
+      // Etiquetas sobre diorama 3D
+      document.getElementById('chip-productor').textContent = operation.productor;
+      document.getElementById('chip-incoterm').textContent = operation.incoterm;
+      document.getElementById('chip-sc').textContent = operation.contractState;
+      document.getElementById('chip-transit').textContent = `${totalDays}d`;
+      document.getElementById('diorama-hub-caption').textContent =
+        `HUB EXPORTALINK • Lote ${operation.lote} • ${operation.origen} → ${operation.destino}`;
+
+      // Ficha de datos
+      document.getElementById('data-producto').textContent = operation.producto;
+      document.getElementById('data-lote').textContent = operation.lote;
+      document.getElementById('data-referencia').textContent = operation.referencia;
+      document.getElementById('data-productor').textContent = operation.productor;
+      document.getElementById('data-comprador').textContent = operation.comprador;
+      document.getElementById('data-origen').textContent = operation.origen;
+      document.getElementById('data-destino').textContent = operation.destino;
+      document.getElementById('data-inv-inicial').textContent = `${operation.inventarioInicial} kg`;
+      document.getElementById('data-comprometida').textContent = `${operation.cantidadComprometida} kg`;
+      document.getElementById('data-disponible').textContent = `${disponible} kg`;
+      document.getElementById('data-precio').textContent = formatUsd(operation.precio);
+      document.getElementById('data-incoterm').textContent = operation.incoterm;
+      document.getElementById('data-transito').textContent = `${operation.tiempoTransito} días (+${operation.diasRetraso}d retraso)`;
+      document.getElementById('data-salida').textContent = operation.fechaSalida;
+      document.getElementById('data-llegada').textContent = etaDate;
+      document.getElementById('data-estado-actual').textContent = `${stageObj.title} — ${scObj.label}`;
+
+      // Actualizar 3D, etapas, gráficos y trazabilidad
+      rebuildInventoryCrates3D();
+      syncStageColors3D();
+      renderStageCards();
+      renderInspector();
+      updateOperationCharts(operation.cantidadComprometida, disponible, totalDays);
+      renderTimeline();
+      renderSmartContractTable();
+      renderHistoryLog();
+      saveState();
+    }
+
+    /* ---------------- MÓDULO 3: SIMULADOR DE ESCENARIOS ---------------- */
+    function linkSliderNum(sliderId, numId) {
+      document.getElementById(numId).value = document.getElementById(sliderId).value;
+    }
+
+    function linkNumSlider(numId, sliderId) {
+      const nEl = document.getElementById(numId);
+      const sEl = document.getElementById(sliderId);
+      const val = Number(nEl.value);
+      if (!Number.isNaN(val)) {
+        sEl.value = Math.max(Number(sEl.min), Math.min(Number(sEl.max), val));
+      }
+    }
+
+    function setSimInputs(retraso, invRed, demInc, varTrans, etaExtra) {
+      document.getElementById('scn-retraso-slider').value = retraso;
+      document.getElementById('scn-retraso-num').value = retraso;
+      document.getElementById('scn-inv-slider').value = invRed;
+      document.getElementById('scn-inv-num').value = invRed;
+      document.getElementById('scn-dem-slider').value = demInc;
+      document.getElementById('scn-dem-num').value = demInc;
+      document.getElementById('scn-var-slider').value = varTrans;
+      document.getElementById('scn-var-num').value = varTrans;
+      document.getElementById('scn-eta-risk').value = String(etaExtra);
+    }
+
+    function applyScenarioPreset(type) {
+      if (type === 'delay10') setSimInputs(10, 0, 0, 0, 0);
+      else if (type === 'invDrop') setSimInputs(0, 250, 0, 0, 0);
+      else if (type === 'demandSpike') setSimInputs(0, 0, 200, 0, 0);
+      else if (type === 'breachEta') setSimInputs(6, 0, 0, 4, 4);
+      computeScenarioSimulation();
+      showStatusToast('Escenario simulado cargado.');
+    }
+
+    function restoreSimulationDefaults() {
+      setSimInputs(0, 0, 0, 0, 0);
+      computeScenarioSimulation();
+      showStatusToast('Parámetros del simulador restaurados.');
+    }
+
+    function computeScenarioSimulation() {
+      const retrasoSim = Math.max(0, Number(document.getElementById('scn-retraso-num').value) || 0);
+      const invRed = Math.max(0, Number(document.getElementById('scn-inv-num').value) || 0);
+      const demInc = Math.max(0, Number(document.getElementById('scn-dem-num').value) || 0);
+      const varTrans = Number(document.getElementById('scn-var-num').value) || 0;
+      const etaExtra = Number(document.getElementById('scn-eta-risk').value) || 0;
+
+      document.getElementById('scn-retraso-lbl').textContent = `+${retrasoSim} días`;
+      document.getElementById('scn-inv-lbl').textContent = `-${invRed} kg`;
+      document.getElementById('scn-dem-lbl').textContent = `+${demInc} kg`;
+      document.getElementById('scn-var-lbl').textContent = `${varTrans > 0 ? '+' : ''}${varTrans} días`;
+
+      const initDays = Math.max(1, operation.tiempoTransito + operation.diasRetraso);
+      const initEta = addDays(operation.fechaSalida, initDays);
+      const initAvailable = operation.inventarioInicial - operation.cantidadComprometida;
+
+      const altDays = Math.max(1, operation.tiempoTransito + varTrans + operation.diasRetraso + retrasoSim + etaExtra);
+      const altEta = addDays(operation.fechaSalida, altDays);
+      const daysDiff = altDays - initDays;
+
+      const altInvIni = Math.max(0, operation.inventarioInicial - invRed);
+      const altComp = operation.cantidadComprometida + demInc;
+      const altAvailable = altInvIni - altComp;
+      const stockDiff = altAvailable - initAvailable;
+
+      // Reglas documentadas de riesgo:
+      // ALTO: altAvailable < 0 O daysDiff >= 10 O etaExtra >= 12
+      // MEDIO: altAvailable < 100 O daysDiff >= 3 O etaExtra >= 4
+      // BAJO: en caso contrario
+      let risk = 'BAJO';
+      let badgeCls = 'px-3.5 py-1.5 rounded-xl font-mono text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 self-start sm:self-auto';
+      let reason = 'Operación dentro de márgenes seguros de inventario y fecha de llegada.';
+
+      if (altAvailable < 0 || daysDiff >= 10 || etaExtra >= 12) {
+        risk = 'ALTO';
+        badgeCls = 'px-3.5 py-1.5 rounded-xl font-mono text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-400/50 self-start sm:self-auto';
+        reason = 'Riesgo alto: posible incumplimiento de fecha estimada de llegada o déficit de inventario.';
+      } else if (altAvailable < 100 || daysDiff >= 3 || etaExtra >= 4) {
+        risk = 'MEDIO';
+        badgeCls = 'px-3.5 py-1.5 rounded-xl font-mono text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/50 self-start sm:self-auto';
+        reason = 'Riesgo medio: desviación moderada en tiempo de tránsito/llegada o saldo disponible reducido.';
+      }
+
+      document.getElementById('scn-risk-badge').textContent = `RIESGO ${risk}`;
+      document.getElementById('scn-risk-badge').className = badgeCls;
+      document.getElementById('scn-risk-reason').textContent = reason;
+
+      document.getElementById('scn-eta-init').textContent = initEta;
+      document.getElementById('scn-eta-new').textContent = altEta;
+      document.getElementById('scn-days-diff').textContent = `${daysDiff > 0 ? '+' : ''}${daysDiff} días (${initDays}d → ${altDays}d)`;
+      document.getElementById('scn-inv-init').textContent = `${initAvailable} kg`;
+      document.getElementById('scn-inv-proj').textContent = `${altAvailable} kg`;
+      document.getElementById('scn-delta-summary').textContent = `${stockDiff > 0 ? '+' : ''}${stockDiff} kg / ${daysDiff > 0 ? '+' : ''}${daysDiff} días`;
+
+      const recs = [];
+      if (altAvailable < 0) {
+        recs.push(`Déficit de ${Math.abs(altAvailable)} kg para el lote ${operation.lote}: coordina compra complementaria con productores en ${operation.origen} o ajusta el compromiso con ${operation.comprador}.`);
+      } else if (altAvailable < 100) {
+        recs.push(`Inventario disponible ajustado (${altAvailable} kg): mantén reserva preventiva antes de aceptar nuevas cotizaciones.`);
+      }
+      if (daysDiff > 0) {
+        recs.push(`Nueva fecha estimada de llegada ${altEta} (+${daysDiff} días frente a ${initEta}): notifica oportunamente a ${operation.comprador} en ${operation.destino} bajo Incoterm ${operation.incoterm}.`);
+      } else if (daysDiff < 0) {
+        recs.push(`Reducción de ${Math.abs(daysDiff)} días en tránsito: adelanta coordinación de recepción en destino.`);
+      }
+      if (recs.length === 0) {
+        recs.push(`El escenario alternativo mantiene ${altAvailable} kg disponibles y llegada estimada el ${altEta} (${altDays} días totales).`);
+      }
+      document.getElementById('scn-recommendations').innerHTML = recs.map(r => `<li>${r}</li>`).join('');
+
+      updateScenarioComparisonChart(initDays, altDays, initAvailable, altAvailable);
+    }
+
+    function applyAlternativeScenarioToModel() {
+      const retrasoSim = Math.max(0, Number(document.getElementById('scn-retraso-num').value) || 0);
+      const invRed = Math.max(0, Number(document.getElementById('scn-inv-num').value) || 0);
+      const demInc = Math.max(0, Number(document.getElementById('scn-dem-num').value) || 0);
+      const varTrans = Number(document.getElementById('scn-var-num').value) || 0;
+      const etaExtra = Number(document.getElementById('scn-eta-risk').value) || 0;
+
+      operation.inventarioInicial = Math.max(0, operation.inventarioInicial - invRed);
+      operation.cantidadComprometida = operation.cantidadComprometida + demInc;
+      operation.tiempoTransito = Math.max(1, operation.tiempoTransito + varTrans);
+      operation.diasRetraso = Math.max(0, operation.diasRetraso + retrasoSim + etaExtra);
+
+      populateFormFromOperation();
+      handleVariablesLiveChange();
+      setSimInputs(0, 0, 0, 0, 0);
+      computeScenarioSimulation();
+
+      appendLog(
+        'SIMULACIÓN',
+        `Escenario alternativo aplicado al modelo virtual (Retraso +${retrasoSim}d, Extra ETA +${etaExtra}d, Var. tránsito ${varTrans >= 0 ? '+' : ''}${varTrans}d, Reducción inv. -${invRed} kg, Incremento demanda +${demInc} kg).`
+      );
+      showStatusToast('Escenario alternativo aplicado al modelo virtual.');
+    }
+
+    /* ---------------- MÓDULO 4: TIMELINE, SMART CONTRACT Y LOG ---------------- */
+    function renderTimeline() {
+      const totalDays = operation.tiempoTransito + operation.diasRetraso;
+      const d0 = operation.fechaSalida;
+      const milestones = [
+        { code: 0, title: 'Acuerdo creado', date: d0, time: '09:00', desc: `Acuerdo ${operation.referencia} registrado para ${operation.producto} (${operation.lote}).` },
+        { code: 1, title: 'Acuerdo confirmado', date: addDays(d0, 1), time: '14:15', desc: `Confirmado entre ${operation.productor} y ${operation.comprador} (${operation.incoterm}).` },
+        { code: 2, title: 'Mercancía preparada', date: addDays(d0, 3), time: '16:00', desc: `${operation.cantidadComprometida} kg preparados y embalados en ${operation.origen}.` },
+        { code: 3, title: 'Envío registrado', date: addDays(d0, 5), time: '10:30', desc: `Embarque registrado con referencia ${operation.referencia}.` },
+        { code: 4, title: 'Mercancía en tránsito', date: addDays(d0, Math.max(6, Math.round(totalDays * 0.5))), time: '08:00', desc: `En ruta hacia ${operation.destino} (${totalDays} días totales estimados).` },
+        { code: 5, title: 'Entrega confirmada', date: addDays(d0, totalDays), time: '15:30', desc: `Entrega/liquidación proyectada para ${operation.comprador}.` }
+      ];
+
+      document.getElementById('timeline-list').innerHTML = milestones.map(m => {
+        const isDone = operation.contractState >= m.code;
+        const dotCls = isDone ? 'bg-emerald-400 border-emerald-200' : 'bg-slate-600 border-slate-400';
+        const pill = isDone
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300">COMPLETADO</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-400">PENDIENTE</span>';
+
+        return `
+          <li class="p-3 rounded-xl bg-hub-abyss/80 border border-slate-800 flex items-start gap-3">
+            <span class="w-3 h-3 rounded-full border-2 ${dotCls} mt-1 shrink-0"></span>
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="font-bold text-white">${m.title}</p>
+                ${pill}
+              </div>
+              <p class="text-[11px] font-mono text-sky-300 mt-0.5">${m.date} • ${m.time}</p>
+              <p class="text-slate-300 mt-1">${m.desc}</p>
+            </div>
+          </li>
+        `;
+      }).join('');
+    }
+
+    function setSmartContractCode(code) {
+      const target = Math.min(5, Math.max(0, Number(code)));
+      operation.contractState = target;
+      const mapScToStage = { 0: 1, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+      operation.etapaActual = mapScToStage[target] ?? operation.etapaActual;
+      inspectedItem = { kind: 'stage', id: operation.etapaActual };
+
+      refreshAllUI();
+      computeScenarioSimulation();
+      const info = SMART_CONTRACT_STATES[target];
+      appendLog('SMART CONTRACT', `Estado cambiado a ${target} (${info.label}) • Etapa ${operation.etapaActual}.`);
+      showStatusToast(`Smart Contract en estado ${target}: ${info.label}`);
+    }
+
+    function advanceSmartContractMilestone() {
+      const next = (operation.contractState + 1) % 6;
+      setSmartContractCode(next);
+    }
+
+    function renderSmartContractTable() {
+      const active = operation.contractState;
+      const cur = SMART_CONTRACT_STATES[active] || SMART_CONTRACT_STATES[4];
+      document.getElementById('sc-active-banner').textContent = `Estado actual: ${cur.code} - ${cur.label}`;
+
+      document.getElementById('smart-contract-tbody').innerHTML = SMART_CONTRACT_STATES.map(st => {
+        let badge = '';
+        let rowCls = 'cursor-pointer hover:bg-hub-panel/50 transition';
+        if (st.code === active) {
+          badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-sky-500/25 text-sky-200 border border-sky-400/40">ESTADO ACTUAL</span>';
+          rowCls += ' bg-sky-950/35';
+        } else if (st.code < active) {
+          badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300">SUPERADO</span>';
+        } else {
+          badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-400">POR CUMPLIR</span>';
+        }
+
+        return `
+          <tr onclick="setSmartContractCode(${st.code})" class="${rowCls}" title="Haz clic para activar estado ${st.code}">
+            <td class="py-2.5 px-2.5 font-mono font-bold text-emerald-400">${st.code}</td>
+            <td class="py-2.5 px-2.5 font-semibold text-white">${st.label}</td>
+            <td class="py-2.5 px-2.5 text-slate-300">${st.desc}</td>
+            <td class="py-2.5 px-2.5">${badge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderHistoryLog() {
+      const box = document.getElementById('history-log-list');
+      if (!logs.length) {
+        box.innerHTML = '<p class="text-slate-400">Sin eventos registrados.</p>';
+        return;
+      }
+      box.innerHTML = logs.map(entry => `
+        <div class="p-2.5 rounded-xl bg-hub-abyss/85 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">${entry.tag}</span>
+            <span class="text-slate-200">${entry.text}</span>
+          </div>
+          <span class="font-mono text-[11px] text-slate-400 shrink-0">${entry.time}</span>
+        </div>
+      `).join('');
+    }
+
+    /* ---------------- GRÁFICOS CHART.JS ---------------- */
+    function updateOperationCharts(comprometida, disponible, totalDays) {
+      const safeComp = Math.max(0, comprometida);
+      const safeDisp = Math.max(0, disponible);
+
+      document.getElementById('fb-inv-comp').textContent = `${safeComp} kg`;
+      document.getElementById('fb-inv-disp').textContent = `${disponible} kg`;
+      document.getElementById('fb-transit-days').textContent = `${totalDays} días`;
+
+      if (typeof Chart === 'undefined') {
+        document.getElementById('inventoryAllocationChart').classList.add('hidden');
+        document.getElementById('transitMilestoneChart').classList.add('hidden');
+        document.getElementById('invChartFallback').classList.remove('hidden');
+        document.getElementById('transitChartFallback').classList.remove('hidden');
+        return;
+      }
+
+      const invCtx = document.getElementById('inventoryAllocationChart').getContext('2d');
+      if (invChart) {
+        invChart.data.datasets[0].data = [safeComp, safeDisp];
+        invChart.update();
+      } else {
+        invChart = new Chart(invCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Comprometida (kg)', 'Disponible (kg)'],
+            datasets: [{
+              data: [safeComp, safeDisp],
+              backgroundColor: ['#f59e0b', '#10b981'],
+              borderColor: '#071926',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '62%',
+            plugins: {
+              legend: { position: 'right', labels: { color: '#e2e8f0', font: { size: 11 } } }
+            }
+          }
+        });
+      }
+
+      const trCtx = document.getElementById('transitMilestoneChart').getContext('2d');
+      const stageSeries = [
+        Math.round(totalDays * 0.1),
+        Math.round(totalDays * 0.2),
+        Math.round(totalDays * 0.35),
+        Math.round(totalDays * 0.85),
+        totalDays
+      ];
+
+      if (transitChart) {
+        transitChart.data.datasets[0].data = stageSeries;
+        transitChart.update();
+      } else {
+        transitChart = new Chart(trCtx, {
+          type: 'line',
+          data: {
+            labels: ['Productor', 'Embalaje', 'Puerto', 'Tránsito', 'Miami'],
+            datasets: [{
+              label: 'Días acumulados estimados',
+              data: stageSeries,
+              borderColor: '#38bdf8',
+              backgroundColor: 'rgba(56, 189, 248, 0.18)',
+              fill: true,
+              tension: 0.3,
+              pointRadius: 3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { ticks: { color: '#cbd5e1', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.1)' } },
+              y: { beginAtZero: true, ticks: { color: '#cbd5e1', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.1)' } }
+            },
+            plugins: {
+              legend: { labels: { color: '#e2e8f0', font: { size: 11 } } }
+            }
+          }
+        });
+      }
+    }
+
+    function updateScenarioComparisonChart(initDays, altDays, initStock, altStock) {
+      document.getElementById('fb-scn-days').textContent = `${initDays}d vs ${altDays}d`;
+      document.getElementById('fb-scn-stock').textContent = `${initStock}kg vs ${altStock}kg`;
+
+      if (typeof Chart === 'undefined') {
+        document.getElementById('scenarioComparisonBarChart').classList.add('hidden');
+        document.getElementById('scnChartFallback').classList.remove('hidden');
+        return;
+      }
+
+      const ctx = document.getElementById('scenarioComparisonBarChart').getContext('2d');
+      if (scnChart) {
+        scnChart.data.datasets[0].data = [initDays, Math.max(0, initStock)];
+        scnChart.data.datasets[1].data = [altDays, Math.max(0, altStock)];
+        scnChart.update();
+      } else {
+        scnChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ['Días Totales Tránsito', 'Inventario Disponible (kg)'],
+            datasets: [
+              {
+                label: 'Escenario Inicial',
+                data: [initDays, Math.max(0, initStock)],
+                backgroundColor: 'rgba(56, 189, 248, 0.78)',
+                borderColor: '#38bdf8',
+                borderWidth: 1,
+                borderRadius: 6
+              },
+              {
+                label: 'Escenario Alternativo',
+                data: [altDays, Math.max(0, altStock)],
+                backgroundColor: 'rgba(16, 185, 129, 0.78)',
+                borderColor: '#10b981',
+                borderWidth: 1,
+                borderRadius: 6
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(148,163,184,0.12)' } },
+              y: { beginAtZero: true, ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(148,163,184,0.12)' } }
+            },
+            plugins: {
+              legend: { labels: { color: '#e2e8f0', font: { size: 11 } } }
+            }
+          }
+        });
+      }
+    }
+
+    /* ---------------- INICIALIZACIÓN ---------------- */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      populateFormFromOperation();
+      initThreeDiorama();
+      refreshAllUI();
+      computeScenarioSimulation();
+    });
+  </script>
+</body>
+</html>
